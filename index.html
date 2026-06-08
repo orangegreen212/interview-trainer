@@ -265,9 +265,13 @@
       </div>
       <div class="apikey-form">
         <label class="field-label">Your Gemini API Key</label>
-        <input class="field-input" type="password" id="api-key-input" placeholder="AIza..." />
-        <div class="field-hint">Stored locally in your browser. Never sent anywhere except Google.</div>
-        <button class="start-btn" style="width:100%" onclick="saveApiKey()">Save & start</button>
+        <input class="field-input" type="text" id="api-key-input" placeholder="AIzaSy..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+        <div class="field-hint">Get free key at <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--accent)">aistudio.google.com/apikey</a> — stored in your browser only.</div>
+        <div id="key-status" style="font-size:12px; margin-bottom:12px; min-height:18px;"></div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn-sm" style="flex:1; justify-content:center; padding:10px;" onclick="testApiKey()">Test key</button>
+          <button class="start-btn" style="flex:2;" onclick="saveApiKey()">Save & start →</button>
+        </div>
       </div>
     </div>
 
@@ -458,15 +462,49 @@ function showApiKeyScreen() {
   document.getElementById('apikey-screen').style.display = 'flex';
   document.getElementById('start-screen').style.display = 'none';
   document.getElementById('session-screen').style.display = 'none';
-  if (state.apiKey) document.getElementById('api-key-input').value = state.apiKey;
+  const input = document.getElementById('api-key-input');
+  if (state.apiKey) {
+    input.value = state.apiKey;
+    setKeyStatus('ok', '✓ Key saved — test it or save again to continue');
+  }
 }
 
 function saveApiKey() {
   const key = document.getElementById('api-key-input').value.trim();
-  if (!key) { alert('Please enter your API key'); return; }
+  if (!key) { setKeyStatus('error', 'Please enter your API key'); return; }
+  if (!key.startsWith('AIza')) { setKeyStatus('error', 'Key should start with AIza... — copy it exactly'); return; }
   state.apiKey = key;
   localStorage.setItem('gemini_api_key', key);
   showStart();
+}
+
+function setKeyStatus(type, msg) {
+  const el = document.getElementById('key-status');
+  if (!el) return;
+  el.style.color = type === 'ok' ? 'var(--green)' : type === 'error' ? 'var(--red)' : 'var(--amber)';
+  el.textContent = msg;
+}
+
+async function testApiKey() {
+  const key = document.getElementById('api-key-input').value.trim();
+  if (!key) { setKeyStatus('error', 'Enter key first'); return; }
+  setKeyStatus('loading', '⏳ Testing connection...');
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: 'Reply: OK' }] }], generationConfig: { maxOutputTokens: 5 } })
+    });
+    if (res.ok) {
+      setKeyStatus('ok', '✓ Connected! Click "Save & start →"');
+    } else {
+      const err = await res.json();
+      setKeyStatus('error', '✗ ' + (err.error?.message || 'HTTP ' + res.status));
+    }
+  } catch(e) {
+    setKeyStatus('error', '✗ ' + e.message);
+  }
 }
 
 function showStart() {
